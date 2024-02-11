@@ -11,7 +11,6 @@ def parse_args():
     parser.add_argument('--agent', type=str, default='gpt-3.5-turbo-0613')
     return parser.parse_args()
 
-
 def interaction(agent: AgentClient):
     try:
         history = []
@@ -31,7 +30,6 @@ def interaction(agent: AgentClient):
         print("\n[Exit] KeyboardInterrupt")
         exit(0)
 
-
 if __name__ == '__main__':
     args = parse_args()
     loader = ConfigLoader()
@@ -40,4 +38,5 @@ if __name__ == '__main__':
     agent_config = config[args.agent]
     factory = InstanceFactory(**agent_config)
     agent_client: AgentClient = factory.create()
+    print(vars(agent_client))
     interaction(agent_client)

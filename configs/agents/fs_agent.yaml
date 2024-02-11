@@ -2,9 +2,15 @@ default:
   module: "src.client.agents.FastChatAgent"
   parameters:
     name: "FastChat"
-    controller_address: "http://localhost:55555"
+    controller_address: "http://localhost:8000"
+    prompter: object_prompt
+    prompt_template: "/Users/aidanlew/learning/llm/AgentBench/configs/templates/codellama34b_yaml.yml"
     max_new_tokens: 512
     temperature: 0
+
+objectllama-7b:
+  parameters:
+    model_name: "objectllama-7b-v2.11"
 
 vicuna-33b:
   parameters:

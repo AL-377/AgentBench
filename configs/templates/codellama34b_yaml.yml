@@ -1,0 +1,24 @@
+user_template:
+  "[INST]{content}[/INST]"
+assistant_template:
+  "{content}"
+tool_response_template:
+  "[INST]{content}[/INST]"
+system_template: |
+  Please answer the above questions from users:
+  If the user's problem can be solved by calling the following object or function, please call the corresponding object or function to solve the problem.
+  If the user's information is not sufficient to populate all of the function's parameters, ask the user questions to provide more information.
+  If the user's question is not related to the following function, you can answer the user's question directly.
+  Response with following schemas and objects:
+  {objects_string}
+  {choice_string}
+objects_template: |
+  {objects}
+choice_template:
+  You need to use {choices} tool.
+input_dump_method: 
+  yaml
+starter:
+  ""
+output_dump_method:
+  yaml

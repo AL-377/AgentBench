@@ -9,7 +9,7 @@ from requests.exceptions import Timeout, ConnectionError
 
 from ..agent import AgentClient
 from ...typings import AgentNetworkException
-
+from ...utils import my_input_format,my_load
 
 class Prompter:
     @staticmethod
@@ -26,6 +26,30 @@ class Prompter:
             return None
         if hasattr(Prompter, name) and callable(getattr(Prompter, name)):
             return getattr(Prompter, name)(**args)
+
+
+    @staticmethod
+    def object_prompt():
+        def _prompter(messages: List[dict], tools: Union[None,List[dict]], tool_choice: Union[None,List], config:dict):
+            # prompt = ""
+            # role_dict = {
+            #     "system": "System",
+            #     "user": "Human",
+            #     "agent": "Assistant",
+            # }
+            # for item in messages:
+            #     prompt += f"{role_dict[item['role']]}: {item['content']}\n\n"
+            # prompt += "Assistant:"
+
+            if tool_choice:
+                tool_choice=[{"name":choice} for choice in tool_choice]
+
+            task_prompt = my_input_format(messages=messages,
+                                objects=tools, choices=tool_choice, config=config)
+
+            return {"prompt": task_prompt}
+
+        return _prompter
 
     @staticmethod
     def claude():
@@ -106,6 +130,7 @@ class FastChatAgent(AgentClient):
         max_new_tokens=32,
         top_p=0,
         prompter=None,
+        prompt_template=None,
         args=None,
         **kwargs,
     ) -> None:
@@ -120,6 +145,7 @@ class FastChatAgent(AgentClient):
         self.max_new_tokens = max_new_tokens
         self.top_p = top_p
         self.prompter = Prompter.get_prompter(prompter)
+        self.prompt_template = prompt_template
         self.args = args or {}
         print(self.max_new_tokens)
         super().__init__(**kwargs)
@@ -141,7 +167,10 @@ class FastChatAgent(AgentClient):
             **self.args,
         }
         if self.prompter:
-            prompt = self.prompter(history)
+            config = my_load(open(self.prompt_template, 'r', encoding='utf-8').read(), 'yaml')
+            print(f"history is {history}")
+            prompt = self.prompter(messages=history,tools=None,tool_choice=None,config=config)
+            print(f"prompt is {prompt}")
             gen_params.update(prompt)
         else:
             conv = get_conversation_template(self.model_name)
@@ -174,12 +203,14 @@ class FastChatAgent(AgentClient):
                     timeout=120,
                 )
                 text = ""
+                print(response)
                 for line in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
                     if line:
                         data = json.loads(line)
-                        if data["error_code"] != 0:
-                            raise AgentNetworkException(data["text"])
-                        text = data["text"]
+                        text=data["task_response"]
+                        # if data["error_code"] != 0:
+                        #     raise AgentNetworkException(data["text"])
+                        # text = data["text"]
                 return text
             # if timeout or connection error, retry
             except Timeout:
