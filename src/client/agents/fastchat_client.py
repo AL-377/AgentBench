@@ -31,16 +31,6 @@ class Prompter:
     @staticmethod
     def object_prompt():
         def _prompter(messages: List[dict], tools: Union[None,List[dict]], tool_choice: Union[None,List], config:dict):
-            # prompt = ""
-            # role_dict = {
-            #     "system": "System",
-            #     "user": "Human",
-            #     "agent": "Assistant",
-            # }
-            # for item in messages:
-            #     prompt += f"{role_dict[item['role']]}: {item['content']}\n\n"
-            # prompt += "Assistant:"
-
             if tool_choice:
                 tool_choice=[{"name":choice} for choice in tool_choice]
 

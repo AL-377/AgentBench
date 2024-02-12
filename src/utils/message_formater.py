@@ -10,10 +10,7 @@ from ruamel import yaml
 from ruamel.yaml.comments import CommentedMap as OrderedDict
 import math
 import numpy as np
-import pdb
 
-yaml_obj = yaml.YAML()
-yaml_obj.width = 1000000
 
 
 folded = yaml.scalarstring.FoldedScalarString
@@ -66,8 +63,12 @@ def custom_yaml_dump(item):
     elif isinstance(item, list):
         item = [custom_yaml_dump(x) for x in item]
         return item
+    elif isinstance(item, (int,float)):
+        return item
+    elif item is None:
+        return item
     else:
-        return double_quoted(item)
+        raise NotImplementedError(f"type {type(item)} is not supported.")
 
 
 def list_dump(item):
@@ -94,6 +95,8 @@ def without_quoted_dump(item):
 def yaml_load(string):
     """load yaml"""
     f = StringIO(string)
+    yaml_obj = yaml.YAML()
+    yaml_obj.width = 1000000
     data = yaml_obj.load(f)
     return data
 
@@ -101,6 +104,8 @@ def yaml_load(string):
 def yaml_load_all(string):
     """load yaml"""
     f = StringIO(string)
+    yaml_obj = yaml.YAML()
+    yaml_obj.width = 1000000
     data = yaml_obj.load_all(f)
     return data
 
@@ -109,6 +114,21 @@ def yaml_dump(item):
     f = StringIO()
     try:
         item = custom_yaml_dump(item)
+        yaml_obj = yaml.YAML()
+        yaml_obj.width = 1000000
+        yaml_obj.dump(item, f)
+    except EmptyValueException:
+        return None
+    f.seek(0)
+    string = f.read()
+    return string
+
+
+def yaml_origin_dump(item):
+    f = StringIO()
+    try:
+        yaml_obj = yaml.YAML()
+        yaml_obj.width = 1000000
         yaml_obj.dump(item, f)
     except EmptyValueException:
         return None
@@ -121,6 +141,20 @@ def yaml_dump_all(item):
     f = StringIO()
     try:
         item = custom_yaml_dump(item)
+        yaml_obj = yaml.YAML()
+        yaml_obj.width = 1000000
+        yaml_obj.dump_all(item, f)
+    except EmptyValueException:
+        return None
+    f.seek(0)
+    string = f.read()
+    return string
+
+def yaml_origin_dump_all(item):
+    f = StringIO()
+    try:
+        yaml_obj = yaml.YAML()
+        yaml_obj.width = 1000000
         yaml_obj.dump_all(item, f)
     except EmptyValueException:
         return None
@@ -161,7 +195,7 @@ def message_format(msg, config):
     """https://github.com/facebookresearch/llama/blob/main/llama/generation.py#L343"""
     if msg["role"].lower().startswith("user"):
         string = config['user_template'].format(content=msg['content'])
-    elif msg["role"].lower().startswith("system"): 
+    elif msg["role"].lower().startswith("system"):
         string = config['user_template'].format(content=msg['content'])
     elif msg["role"].lower().startswith("assistant") or msg["role"].lower().startswith("agent") :
         if "content" in msg:
@@ -169,8 +203,15 @@ def message_format(msg, config):
         else:
             string = ""
         if "object_calls" in msg:
-            string += "\n" + yaml_dump_all(msg["object_calls"]).strip()
-    elif msg["role"].lower().startswith("tool_response"):
+            if config['output_dump_method'] == 'yaml':
+                string += "\n" + yaml_dump_all(msg["object_calls"]).strip()
+            elif config['output_dump_method'] == 'yaml_origin':
+                string += "\n" + yaml_origin_dump_all(msg["object_calls"]).strip()
+            elif config['output_dump_method'] == 'json':
+                string += "\n" + json.dumps(msg["object_calls"], ensure_ascii=False).strip()
+            else:
+                raise NotImplementedError
+    elif msg["role"].lower().startswith("tool"):
         string = config['tool_response_template'].format(content=msg['content'])
     else:
         print(msg["role"])
@@ -213,9 +254,11 @@ def find_system_msg(messages):
 
 def my_dump(item, dump_method):
     """my dump method, yaml or json"""
-    item = json_try(item)
+    #item = json_try(item)
     if dump_method == 'yaml':
         return yaml_dump(item)
+    elif dump_method == 'yaml_origin':
+        return yaml_origin_dump(item)
     elif dump_method == 'json':
         #return json.dumps(item, ensure_ascii=False)
         return json_dump(item)
@@ -260,7 +303,7 @@ def my_load(string, dump_method):
 
 def my_input_format(
         messages: List[Dict],
-        objects: Union[str,List[Dict]],
+        objects: List[Dict],
         choices: List[Dict],
         config: Union[str, Dict]
     ):
@@ -285,12 +328,9 @@ def my_input_format(
     """
     if isinstance(config, str):
         config = yaml_load(open(config, 'r', encoding='utf-8').read())
-    if objects is not None:
-        if isinstance(objects,list) and len(objects) > 0:
-            string = my_dump(objects, config['input_dump_method'])
-            objects_string = config['objects_template'].format(objects=string)
-        elif isinstance(objects,str):
-            objects_string = config['objects_template'].format(objects=objects)
+    if objects is not None and len(objects) > 0:
+        string = my_dump(objects, config['input_dump_method'])
+        objects_string = config['objects_template'].format(objects=string)
     else:
         objects_string = ""
     if choices is not None and len(choices) > 0:
@@ -303,15 +343,15 @@ def my_input_format(
         choice_string=choice_string.strip()
     ).strip()
     dialog = messages
-    #sys_msg_idx = find_system_msg(dialog)
-    #if sys_msg_idx == -1:
-    #    dialog.insert(0, {"role": "system", "content": system_suffix})
-    #else:
-    #    dialog[sys_msg_idx]["content"] += "\n" + system_suffix
+    sys_msg_idx = find_system_msg(dialog)
+    if sys_msg_idx == -1:
+        dialog.insert(0, {"role": "system", "content": system_suffix})
+    else:
+        dialog[sys_msg_idx]["content"] += "\n" + system_suffix
 
     # merge functions
     #dialog = merge_messages(dialog)
-    dialog.append({"role": "system", "content": system_suffix})
+    #dialog.append({"role": "system", "content": system_suffix})
 
     formated_messages = [message_format(msg, config) for msg in dialog]
     for x in formated_messages:
@@ -331,6 +371,13 @@ def my_output_format(
         config = yaml_load(open(config, 'r', encoding='utf-8').read())
     #return my_dump(output, config['output_dump_method'])
     if 'object_calls' in output:
-        return yaml_dump_all(output['object_calls']).strip()
+        if config['output_dump_method'] == 'yaml':
+            return yaml_dump_all(output['object_calls']).strip()
+        elif config['output_dump_method'] == 'yaml_origin':
+            return yaml_origin_dump_all(output['object_calls']).strip()
+        elif config['output_dump_method'] == 'json':
+            return json.dumps(output['object_calls'], ensure_ascii=False).strip()
+        else:
+            raise NotImplementedError
     else:
         return ''
